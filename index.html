@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Prototipo xAPI – OpenWebinars ⇄ Netex</title>
+  <style>
+    :root { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+    body { margin: 0; padding: 24px; background:#0b1020; color:#e7eaf3; }
+    h1 { margin: 0 0 16px; font-size: 22px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card { background: #141a33; border:1px solid #223; border-radius: 14px; padding: 16px; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+    label { display:block; font-size: 12px; color:#aab2d5; margin-bottom:6px; }
+    input, select, textarea { width: 100%; padding: 10px 12px; border-radius: 10px; border:1px solid #2a3358; background:#0e1430; color:#e7eaf3; outline: none; }
+    input:focus, select:focus, textarea:focus { border-color:#4a67ff; box-shadow: 0 0 0 3px rgba(74,103,255,.25); }
+    .row { display:flex; gap:12px; }
+    .row > * { flex: 1; }
+    button { padding: 10px 14px; border-radius: 10px; border:1px solid #4a67ff; background:#4a67ff; color:white; cursor:pointer; font-weight:600; }
+    button.secondary { background:transparent; }
+    .muted { color:#9aa3c7; font-size:12px; }
+    pre { background:#0e1430; color:#e7eaf3; border:1px solid #2a3358; padding:12px; border-radius:10px; overflow:auto; max-height:320px; }
+    .ok { color:#00d084; }
+    .err { color:#ff6b6b; }
+  </style>
+</head>
+<body>
+  <h1>Prototipo xAPI – envío de statements</h1>
+  <p class="muted">Sube este HTML a GitHub Pages. Configura el endpoint y Authorization. Envía <em>initialized / progressed / completed / passed / failed / answered</em> con duración y puntuación.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2 style="margin-top:0">1) Destino (Gateway / LRS)</h2>
+      <label>Endpoint xAPI (POST /xapi/statements)</label>
+      <input id="endpoint" placeholder="https://tu-gateway.netex/xapi/statements" />
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label>Authorization (cabecera completa)</label>
+          <input id="auth" placeholder="Bearer eyJ...  o  Basic abcdef==" />
+        </div>
+        <div>
+          <label>Actor (account.name)</label>
+          <input id="actorName" placeholder="u_12345" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label>Actor homePage (account.homePage)</label>
+          <input id="actorHome" placeholder="https://netexcloud" value="https://netexcloud" />
+        </div>
+        <div>
+          <label>Attempt ID</label>
+          <input id="attempt" placeholder="att_abc123" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label>Course ID (context.parent)</label>
+          <input id="courseId" placeholder="c_987" />
+        </div>
+        <div>
+          <label>Objective ID (context.grouping)</label>
+          <input id="objectiveId" placeholder="obj_321" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">2) Objeto (recurso OpenWebinars)</h2>
+      <label>Object ID (URL o URN estable)</label>
+      <input id="objectId" placeholder="https://openwebinars.net/resource/abc123" />
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label>Título</label>
+          <input id="objectTitle" placeholder="Curso Git básico" />
+        </div>
+        <div>
+          <label>Idioma BCP47</label>
+          <input id="lang" placeholder="es-ES" value="es-ES" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">3) Verbo, progreso y puntuación</h2>
+      <div class="row">
+        <div>
+          <label>Verbo</label>
+          <select id="verb">
+            <option value="initialized">initialized</option>
+            <option value="progressed">progressed</option>
+            <option value="answered">answered</option>
+            <option value="completed">completed</option>
+            <option value="passed">passed</option>
+            <option value="failed">failed</option>
+            <option value="terminated">terminated</option>
+          </select>
+        </div>
+        <div>
+          <label>Progreso (%) — solo para <em>progressed</em></label>
+          <input id="progress" type="number" min="0" max="100" step="1" placeholder="0–100" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label>Puntuación (0–100)</label>
+          <input id="score" type="number" min="0" max="100" step="1" placeholder="Ej: 92" />
+        </div>
+        <div>
+          <label>Duración</label>
+          <div class="row" style="gap:8px">
+            <input id="durH" type="number" min="0" placeholder="h" />
+            <input id="durM" type="number" min="0" max="59" placeholder="m" />
+            <input id="durS" type="number" min="0" max="59" placeholder="s" />
+          </div>
+          <div class="muted" style="margin-top:6px">Se convertirá a ISO8601 (p.ej. PT1H12M)</div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label>Pregunta (answered)</label>
+          <input id="question" placeholder="¿Qué es Git?" />
+        </div>
+        <div>
+          <label>Respuesta (answered)</label>
+          <input id="response" placeholder="Un sistema de control de versiones" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:16px">
+        <button id="btnPreview" class="secondary">Previsualizar statement</button>
+        <button id="btnSend">Enviar al endpoint</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">4) Log</h2>
+      <pre id="log"></pre>
+    </div>
+  </div>
+
+  <script>
+    const VERBS = {
+      initialized: "http://adlnet.gov/expapi/verbs/initialized",
+      progressed: "https://w3id.org/xapi/adl/verbs/progressed",
+      answered:   "http://adlnet.gov/expapi/verbs/answered",
+      completed:  "http://adlnet.gov/expapi/verbs/completed",
+      passed:     "http://adlnet.gov/expapi/verbs/passed",
+      failed:     "http://adlnet.gov/expapi/verbs/failed",
+      terminated: "http://adlnet.gov/expapi/verbs/terminated"
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const log = (msg, cls) => {
+      const pre = $("log");
+      const line = document.createElement('div');
+      line.className = cls || '';
+      line.textContent = `[${new Date().toISOString()}] ${msg}`;
+      pre.appendChild(line);
+      pre.scrollTop = pre.scrollHeight;
+    };
+
+    function uuidv4() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
+    function isoDuration(h, m, s) {
+      h = parseInt(h||0,10); m = parseInt(m||0,10); s = parseInt(s||0,10);
+      let out = 'PT';
+      if (h>0) out += h + 'H';
+      if (m>0) out += m + 'M';
+      if (s>0 || (!h && !m && !s)) out += s + 'S';
+      return out;
+    }
+
+    function scaled(v) {
+      const n = Number(v);
+      if (isNaN(n)) return undefined;
+      const clamped = Math.min(100, Math.max(0, n));
+      return Math.round((clamped/100) * 1000) / 1000; // 3 decimales
+    }
+
+    function buildStatement() {
+      const verbKey = $("verb").value;
+      const statement = {
+        id: uuidv4(),
+        actor: {
+          account: {
+            homePage: $("actorHome").value || 'https://netexcloud',
+            name: $("actorName").value || 'u_demo'
+          }
+        },
+        verb: {
+          id: VERBS[verbKey],
+          display: { 'en-US': verbKey }
+        },
+        object: {
+          id: $("objectId").value || 'https://openwebinars.net/resource/demo',
+          definition: {
+            name: { [$("lang").value || 'es-ES']: $("objectTitle").value || 'Recurso demo OpenWebinars' }
+          }
+        },
+        context: {
+          contextActivities: {
+            parent:   [{ id: `https://netexcloud/course/${$("courseId").value || 'c_demo'}` }],
+            grouping: [{ id: `https://netexcloud/objective/${$("objectiveId").value || 'obj_demo'}` }]
+          },
+          extensions: {
+            'https://netexcloud/ext/attempt_id': $("attempt").value || `att_${uuidv4().slice(0,8)}`
+          }
+        },
+        timestamp: new Date().toISOString()
+      };
+
+      // Result (score/duration/completion/success)
+      const dur = isoDuration($("durH").value, $("durM").value, $("durS").value);
+      const sc = scaled($("score").value);
+      statement.result = {};
+      if (dur) statement.result.duration = dur;
+
+      if (verbKey === 'completed') {
+        statement.result.completion = true;
+      }
+      if (verbKey === 'passed' || verbKey === 'failed') {
+        statement.result.completion = true;
+        statement.result.success = (verbKey === 'passed');
+      }
+      if (sc !== undefined && (verbKey === 'passed' || verbKey === 'failed' || verbKey === 'answered' || verbKey === 'completed')) {
+        statement.result.score = { scaled: sc };
+      }
+
+      // answered details
+      const q = $("question").value; const r = $("response").value;
+      if (verbKey === 'answered' && (q || r)) {
+        statement.object.definition = statement.object.definition || {};
+        statement.object.definition.description = { [$("lang").value || 'es-ES']: q || 'Pregunta' };
+        statement.result.response = r || '';
+      }
+
+      // progressed → extensión de progreso 0..1
+      if (verbKey === 'progressed') {
+        const p = Number($("progress").value);
+        const pct = isNaN(p) ? 0 : Math.min(100, Math.max(0, p));
+        statement.context.extensions['https://w3id.org/xapi/progress'] = Math.round((pct/100)*1000)/1000;
+      }
+
+      return statement;
+    }
+
+    function preview() {
+      const st = buildStatement();
+      log('Preview statement ↓');
+      log(JSON.stringify(st, null, 2));
+    }
+
+    async function send() {
+      const endpoint = $("endpoint").value.trim();
+      if (!endpoint) { log('Falta endpoint', 'err'); return; }
+      const st = buildStatement();
+      log('Enviando statement ' + st.id + ' ...');
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Experience-API-Version': '1.0.3',
+            ...( $("auth").value.trim() ? { 'Authorization': $("auth").value.trim() } : {} )
+          },
+          body: JSON.stringify([st]) // lote de 1
+        });
+        const text = await res.text();
+        if (res.ok) {
+          log('✓ OK ' + res.status + ' ' + res.statusText, 'ok');
+          log(text);
+        } else {
+          log('✗ Error ' + res.status + ' ' + res.statusText, 'err');
+          log(text, 'err');
+        }
+      } catch (e) {
+        log('✗ EXCEPCIÓN al enviar: ' + e.message, 'err');
+      }
+    }
+
+    // Helpers: autocompletar datos demo
+    (function initDefaults(){
+      $("actorName").value = 'u_' + uuidv4().slice(0,8);
+      $("attempt").value   = 'att_' + uuidv4().slice(0,8);
+      $("courseId").value  = 'c_' + uuidv4().slice(0,4);
+      $("objectiveId").value = 'obj_' + uuidv4().slice(0,4);
+    })();
+
+    $("btnPreview").addEventListener('click', (e)=>{ e.preventDefault(); preview(); });
+    $("btnSend").addEventListener('click', (e)=>{ e.preventDefault(); send(); });
+  </script>
+</body>
+</html>
