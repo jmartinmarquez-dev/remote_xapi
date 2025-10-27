@@ -188,26 +188,27 @@
       const verbKey = $("verb").value;
       const statement = {
         id: uuidv4(),
-        actor: {
+        actor: (window._actorFromQuery ? window._actorFromQuery : {
           account: {
             homePage: $("actorHome").value || 'https://netexcloud',
             name: $("actorName").value || 'u_demo'
           }
-        },
+        }),
         verb: {
           id: VERBS[verbKey],
-          display: { 'en-US': verbKey }
+          display: { 'en-US': verbKey, 'es-ES': verbKey }
         },
         object: {
           id: $("objectId").value || 'https://openwebinars.net/resource/demo',
+          objectType: 'Activity',
           definition: {
             name: { [$("lang").value || 'es-ES']: $("objectTitle").value || 'Recurso demo OpenWebinars' }
           }
         },
         context: {
           contextActivities: {
-            parent:   [{ id: `https://netexcloud/course/${$("courseId").value || 'c_demo'}` }],
-            grouping: [{ id: `https://netexcloud/objective/${$("objectiveId").value || 'obj_demo'}` }]
+            parent:   [ { id: (window._parentId || `https://netexcloud/course/${$("courseId").value || 'c_demo'}`) } ],
+            grouping: [ { id: `https://netexcloud/objective/${$("objectiveId").value || 'obj_demo'}` } ]
           },
           extensions: {
             'https://netexcloud/ext/attempt_id': $("attempt").value || `att_${uuidv4().slice(0,8)}`
@@ -215,6 +216,10 @@
         },
         timestamp: new Date().toISOString()
       };
+
+      if (window._registration) {
+        statement.context.registration = window._registration;
+      }
 
       // Result (score/duration/completion/success)
       const dur = isoDuration($("durH").value, $("durM").value, $("durS").value);
@@ -291,6 +296,42 @@
       $("attempt").value   = 'att_' + uuidv4().slice(0,8);
       $("courseId").value  = 'c_' + uuidv4().slice(0,4);
       $("objectiveId").value = 'obj_' + uuidv4().slice(0,4);
+
+      // --- Parseo de parámetros de la URL del LMS ---
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('endpoint')) {
+          $("endpoint").value = decodeURIComponent(params.get('endpoint'));
+        }
+        if (params.has('auth')) {
+          const a = params.get('auth');
+          if (a) $("auth").value = decodeURIComponent(a);
+        }
+        if (params.has('actor')) {
+          const raw = decodeURIComponent(params.get('actor'));
+          try {
+            const actorObj = JSON.parse(raw);
+            window._actorFromQuery = actorObj;
+            // Si es Agent con account, rellenamos los campos visibles
+            if (actorObj && actorObj.account) {
+              $("actorHome").value = actorObj.account.homePage || $("actorHome").value;
+              $("actorName").value = actorObj.account.name || $("actorName").value;
+            }
+          } catch(e) { /* ignora si no es JSON válido */ }
+        }
+        if (params.has('activity_id')) {
+          $("objectId").value = decodeURIComponent(params.get('activity_id'));
+        }
+        if (params.has('registration')) {
+          window._registration = decodeURIComponent(params.get('registration'));
+        }
+        if (params.has('parent_id')) {
+          window._parentId = decodeURIComponent(params.get('parent_id'));
+        }
+        if (params.has('languagePreference')) {
+          $("lang").value = decodeURIComponent(params.get('languagePreference'));
+        }
+      } catch(e) { /* noop */ }
     })();
 
     $("btnPreview").addEventListener('click', (e)=>{ e.preventDefault(); preview(); });
@@ -298,3 +339,4 @@
   </script>
 </body>
 </html>
+
