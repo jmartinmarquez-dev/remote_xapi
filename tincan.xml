@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<tincan xmlns="http://projecttincan.com/tincan.xsd">
+    <activities>
+        <activity id="http://www.josemanuelmartin.com/activity" type="http://adlnet.gov/expapi/activities/course">
+            <name>Remote xAPI by Jose Martin</name>
+            <description lang="en-US">Remote xAPI by Jose Martin</description>
+            <launch lang="en-us">launcher_remote_xapi.html</launch>
+        </activity>
+    </activities>
+</tincan>
