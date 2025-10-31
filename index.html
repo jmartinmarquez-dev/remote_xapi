@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Prototipo xAPI remote</title>
+  <title>Prototipo xAPI – OpenWebinars ⇄ Netex (Wrapper + Fallback)</title>
   <style>
     :root { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
     body { margin: 0; padding: 24px; background:#0b1020; color:#e7eaf3; }
@@ -21,11 +21,12 @@
     pre { background:#0e1430; color:#e7eaf3; border:1px solid #2a3358; padding:12px; border-radius:10px; overflow:auto; max-height:320px; }
     .ok { color:#00d084; }
     .err { color:#ff6b6b; }
+    .chip { display:inline-block; padding:4px 8px; border-radius:999px; border:1px solid #2a3358; margin-left:8px; font-size:12px; }
   </style>
 </head>
 <body>
-  <h1>Prototipo remote xAPI – envío de statements</h1>
-  <p class="muted">Sube este HTML a GitHub Pages. Configura el endpoint y Authorization. Envía <em>initialized / progressed / completed / passed / failed / answered</em> con duración y puntuación.</p>
+  <h1>Prototipo xAPI – envío de statements <span id="mode" class="chip">modo: detectando…</span></h1>
+  <p class="muted">Incluye <code>tincan-min.js</code> para usar <strong>ADL.XAPIWrapper</strong> si vienes lanzado por LMS con querystring xAPI. Si no, usa <em>fetch</em> como fallback.</p>
 
   <div class="grid">
     <div class="card">
@@ -140,6 +141,9 @@
     </div>
   </div>
 
+  <!-- ADL wrapper -->
+  <script src="tincan-min.js"></script>
+
   <script>
     const VERBS = {
       initialized: "http://adlnet.gov/expapi/verbs/initialized",
@@ -156,7 +160,7 @@
       const pre = $("log");
       const line = document.createElement('div');
       line.className = cls || '';
-      line.textContent = `[${new Date().toISOString()}] ${msg}`;
+      line.textContent = "[" + new Date().toISOString() + "] " + msg;
       pre.appendChild(line);
       pre.scrollTop = pre.scrollHeight;
     };
@@ -184,6 +188,43 @@
       return Math.round((clamped/100) * 1000) / 1000; // 3 decimales
     }
 
+    // ---- Detección y volcado de parámetros query (compatibles con LMS) ----
+    function parseQueryIntoUI() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('endpoint')) {
+          $("endpoint").value = decodeURIComponent(params.get('endpoint'));
+        }
+        if (params.has('auth')) {
+          const a = params.get('auth');
+          if (a) $("auth").value = decodeURIComponent(a);
+        }
+        if (params.has('actor')) {
+          const raw = decodeURIComponent(params.get('actor'));
+          try {
+            const actorObj = JSON.parse(raw);
+            window._actorFromQuery = actorObj;
+            if (actorObj && actorObj.account) {
+              $("actorHome").value = actorObj.account.homePage || $("actorHome").value;
+              $("actorName").value = actorObj.account.name || $("actorName").value;
+            }
+          } catch(e) { /* ignorar */ }
+        }
+        if (params.has('activity_id')) {
+          $("objectId").value = decodeURIComponent(params.get('activity_id'));
+        }
+        if (params.has('registration')) {
+          window._registration = decodeURIComponent(params.get('registration'));
+        }
+        if (params.has('parent_id')) {
+          window._parentId = decodeURIComponent(params.get('parent_id'));
+        }
+        if (params.has('languagePreference')) {
+          $("lang").value = decodeURIComponent(params.get('languagePreference'));
+        }
+      } catch(e) {}
+    }
+
     function buildStatement() {
       const verbKey = $("verb").value;
       const statement = {
@@ -192,7 +233,8 @@
           account: {
             homePage: $("actorHome").value || 'https://netexcloud',
             name: $("actorName").value || 'u_demo'
-          }
+          },
+          objectType: "Agent"
         }),
         verb: {
           id: VERBS[verbKey],
@@ -221,7 +263,7 @@
         statement.context.registration = window._registration;
       }
 
-      // Result (score/duration/completion/success)
+      // Result
       const dur = isoDuration($("durH").value, $("durM").value, $("durS").value);
       const sc = scaled($("score").value);
       statement.result = {};
@@ -238,15 +280,15 @@
         statement.result.score = { scaled: sc };
       }
 
-      // answered details
-      const q = $("question").value; const r = $("response").value;
-      if (verbKey === 'answered' && (q || r)) {
-        statement.object.definition = statement.object.definition || {};
-        statement.object.definition.description = { [$("lang").value || 'es-ES']: q || 'Pregunta' };
-        statement.result.response = r || '';
+      if (verbKey === 'answered') {
+        const q = $("question").value; const r = $("response").value;
+        if (q || r) {
+          statement.object.definition = statement.object.definition || {};
+          statement.object.definition.description = { [$("lang").value || 'es-ES']: q || 'Pregunta' };
+          statement.result.response = r || '';
+        }
       }
 
-      // progressed → extensión de progreso 0..1
       if (verbKey === 'progressed') {
         const p = Number($("progress").value);
         const pct = isNaN(p) ? 0 : Math.min(100, Math.max(0, p));
@@ -256,17 +298,34 @@
       return statement;
     }
 
-    function preview() {
-      const st = buildStatement();
-      log('Preview statement ↓');
-      log(JSON.stringify(st, null, 2));
+    async function sendWithWrapper(statements) {
+      try {
+        if (window.ADL && ADL.XAPIWrapper) {
+          // Forzar versión si procede
+          ADL.XAPIWrapper.xapiVersion = "1.0.3";
+          // Enviar
+          ADL.XAPIWrapper.sendStatements(statements, function(xhr, res) {
+            if (xhr && (xhr.status >= 200 && xhr.status < 300)) {
+              log('✓ OK ' + xhr.status + ' (Wrapper)', 'ok');
+              log(xhr.response || JSON.stringify(res || {}, null, 2));
+            } else if (xhr) {
+              log('✗ Error ' + xhr.status + ' (Wrapper)', 'err');
+              log(xhr.response || '(sin cuerpo)', 'err');
+            } else {
+              log('✓ Enviado (Wrapper sin xhr)', 'ok');
+            }
+          });
+        } else {
+          throw new Error("Wrapper no cargado");
+        }
+      } catch (e) {
+        log('✗ EXCEPCIÓN Wrapper: ' + e.message, 'err');
+      }
     }
 
-    async function send() {
+    async function sendWithFetch(statements) {
       const endpoint = $("endpoint").value.trim();
       if (!endpoint) { log('Falta endpoint', 'err'); return; }
-      const st = buildStatement();
-      log('Enviando statement ' + st.id + ' ...');
       try {
         const res = await fetch(endpoint, {
           method: 'POST',
@@ -275,7 +334,7 @@
             'X-Experience-API-Version': '1.0.3',
             ...( $("auth").value.trim() ? { 'Authorization': $("auth").value.trim() } : {} )
           },
-          body: JSON.stringify([st]) // lote de 1
+          body: JSON.stringify(statements)
         });
         const text = await res.text();
         if (res.ok) {
@@ -290,53 +349,73 @@
       }
     }
 
-    // Helpers: autocompletar datos demo
+    function useWrapperMode() {
+      try {
+        const hasWrapper = !!(window.ADL && ADL.XAPIWrapper);
+        if (!hasWrapper) return false;
+
+        const lrs = ADL.XAPIWrapper.lrs || {};
+        const qp = new URLSearchParams(location.search);
+        // Si hay endpoint/actor/registration en query o en lrs, consideramos Wrapper
+        const fromQuery = qp.has('endpoint') || qp.has('actor') || qp.has('registration');
+        const fromLrs   = !!(lrs.endpoint || lrs.actor || lrs.registration);
+        return fromQuery || fromLrs;
+      } catch { return false; }
+    }
+
+    function updateModeBadge(wrapperOn) {
+      const badge = document.getElementById('mode');
+      if (wrapperOn) {
+        badge.textContent = 'modo: Wrapper (ADL)';
+        badge.style.borderColor = '#00d084';
+      } else {
+        badge.textContent = 'modo: Fallback (fetch)';
+        badge.style.borderColor = '#aab2d5';
+      }
+    }
+
+    // --- INIT ---
     (function initDefaults(){
       $("actorName").value = 'u_' + uuidv4().slice(0,8);
       $("attempt").value   = 'att_' + uuidv4().slice(0,8);
       $("courseId").value  = 'c_' + uuidv4().slice(0,4);
       $("objectiveId").value = 'obj_' + uuidv4().slice(0,4);
 
-      // --- Parseo de parámetros de la URL del LMS ---
+      parseQueryIntoUI();
+
+      // Si el wrapper ya trajo datos, volcarlos en UI
       try {
-        const params = new URLSearchParams(window.location.search);
-        if (params.has('endpoint')) {
-          $("endpoint").value = decodeURIComponent(params.get('endpoint'));
-        }
-        if (params.has('auth')) {
-          const a = params.get('auth');
-          if (a) $("auth").value = decodeURIComponent(a);
-        }
-        if (params.has('actor')) {
-          const raw = decodeURIComponent(params.get('actor'));
-          try {
-            const actorObj = JSON.parse(raw);
-            window._actorFromQuery = actorObj;
-            // Si es Agent con account, rellenamos los campos visibles
-            if (actorObj && actorObj.account) {
-              $("actorHome").value = actorObj.account.homePage || $("actorHome").value;
-              $("actorName").value = actorObj.account.name || $("actorName").value;
+        if (window.ADL && ADL.XAPIWrapper) {
+          const lrs = ADL.XAPIWrapper.lrs || {};
+          if (lrs.endpoint && !$("endpoint").value) {
+            // El wrapper suele poner endpoint sin '/statements' al final
+            $("endpoint").value = lrs.endpoint.replace(/\/?$/, '') + (lrs.endpoint.endsWith('/statements') ? '' : '/statements');
+          }
+          if (lrs.actor) {
+            const a = (typeof lrs.actor === 'string') ? JSON.parse(lrs.actor) : lrs.actor;
+            window._actorFromQuery = window._actorFromQuery || a;
+            if (a?.account) {
+              $("actorHome").value = a.account.homePage || $("actorHome").value;
+              $("actorName").value = a.account.name || $("actorName").value;
             }
-          } catch(e) { /* ignora si no es JSON válido */ }
+          }
+          if (lrs.registration) window._registration = window._registration || lrs.registration;
         }
-        if (params.has('activity_id')) {
-          $("objectId").value = decodeURIComponent(params.get('activity_id'));
-        }
-        if (params.has('registration')) {
-          window._registration = decodeURIComponent(params.get('registration'));
-        }
-        if (params.has('parent_id')) {
-          window._parentId = decodeURIComponent(params.get('parent_id'));
-        }
-        if (params.has('languagePreference')) {
-          $("lang").value = decodeURIComponent(params.get('languagePreference'));
-        }
-      } catch(e) { /* noop */ }
+      } catch {}
+
+      const wrapperOn = useWrapperMode();
+      updateModeBadge(wrapperOn);
+      if (wrapperOn) log('Modo Wrapper xAPI activo (tincan-min.js)', 'ok');
+      else log('Modo Fallback (fetch). Si vienes desde LMS con query xAPI, se activará el Wrapper.', 'err');
     })();
 
-    $("btnPreview").addEventListener('click', (e)=>{ e.preventDefault(); preview(); });
-    $("btnSend").addEventListener('click', (e)=>{ e.preventDefault(); send(); });
+    document.getElementById("btnPreview").addEventListener("click", (e)=>{ e.preventDefault(); const st = buildStatement(); log('Preview statement ↓'); log(JSON.stringify(st, null, 2)); });
+    document.getElementById("btnSend").addEventListener("click", async (e)=>{
+      e.preventDefault();
+      const st = buildStatement();
+      const wrapperOn = useWrapperMode();
+      if (wrapperOn) { await sendWithWrapper([st]); } else { await sendWithFetch([st]); }
+    });
   </script>
 </body>
 </html>
-
