@@ -114,7 +114,7 @@
             <input id="durM" type="number" min="0" max="59" placeholder="m" />
             <input id="durS" type="number" min="0" max="59" placeholder="s" />
           </div>
-          <div class="muted" style="margin-top:6px">Se convertirá a ISO8601 (p.ej. PT1H12M)</div>
+          <div class="muted" style="margin-top:6px">Se convertirá a ISO8601 (p. ej., PT1H12M)</div>
         </div>
       </div>
 
@@ -188,7 +188,6 @@
       return Math.round((clamped/100) * 1000) / 1000; // 3 decimales
     }
 
-    // ---- Detección y volcado de parámetros query (compatibles con LMS) ----
     function parseQueryIntoUI() {
       try {
         const params = new URLSearchParams(window.location.search);
@@ -248,20 +247,10 @@
           }
         },
         context: {
-          contextActivities: {
-            parent:   [ { id: (window._parentId || `https://netexcloud/course/${$("courseId").value || 'c_demo'}`) } ],
-            grouping: [ { id: `https://netexcloud/objective/${$("objectiveId").value || 'obj_demo'}` } ]
-          },
-          extensions: {
-            'https://netexcloud/ext/attempt_id': $("attempt").value || `att_${uuidv4().slice(0,8)}`
-          }
+          ...(window._registration ? { registration: window._registration } : {})
         },
         timestamp: new Date().toISOString()
       };
-
-      if (window._registration) {
-        statement.context.registration = window._registration;
-      }
 
       // Result
       const dur = isoDuration($("durH").value, $("durM").value, $("durS").value);
@@ -289,11 +278,7 @@
         }
       }
 
-      if (verbKey === 'progressed') {
-        const p = Number($("progress").value);
-        const pct = isNaN(p) ? 0 : Math.min(100, Math.max(0, p));
-        statement.context.extensions['https://w3id.org/xapi/progress'] = Math.round((pct/100)*1000)/1000;
-      }
+      // Para 'progressed' no añadimos extensiones en context (requisito: solo registration)
 
       return statement;
     }
@@ -301,9 +286,7 @@
     async function sendWithWrapper(statements) {
       try {
         if (window.ADL && ADL.XAPIWrapper) {
-          // Forzar versión si procede
           ADL.XAPIWrapper.xapiVersion = "1.0.3";
-          // Enviar
           ADL.XAPIWrapper.sendStatements(statements, function(xhr, res) {
             if (xhr && (xhr.status >= 200 && xhr.status < 300)) {
               log('✓ OK ' + xhr.status + ' (Wrapper)', 'ok');
@@ -353,10 +336,8 @@
       try {
         const hasWrapper = !!(window.ADL && ADL.XAPIWrapper);
         if (!hasWrapper) return false;
-
         const lrs = ADL.XAPIWrapper.lrs || {};
         const qp = new URLSearchParams(location.search);
-        // Si hay endpoint/actor/registration en query o en lrs, consideramos Wrapper
         const fromQuery = qp.has('endpoint') || qp.has('actor') || qp.has('registration');
         const fromLrs   = !!(lrs.endpoint || lrs.actor || lrs.registration);
         return fromQuery || fromLrs;
@@ -374,7 +355,6 @@
       }
     }
 
-    // --- INIT ---
     (function initDefaults(){
       $("actorName").value = 'u_' + uuidv4().slice(0,8);
       $("attempt").value   = 'att_' + uuidv4().slice(0,8);
@@ -383,12 +363,10 @@
 
       parseQueryIntoUI();
 
-      // Si el wrapper ya trajo datos, volcarlos en UI
       try {
         if (window.ADL && ADL.XAPIWrapper) {
           const lrs = ADL.XAPIWrapper.lrs || {};
           if (lrs.endpoint && !$("endpoint").value) {
-            // El wrapper suele poner endpoint sin '/statements' al final
             $("endpoint").value = lrs.endpoint.replace(/\/?$/, '') + (lrs.endpoint.endsWith('/statements') ? '' : '/statements');
           }
           if (lrs.actor) {
